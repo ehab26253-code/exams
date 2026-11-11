@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>الأسطورة محمود يوسف</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f4ee;--sf:#fff;--tx:#1c1b18;--mu:#6b675c;--ac:#b8860b;--ac2:#fff;--bd:#e2ddcf;--ok:#1b7a43;--bad:#b3261e}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#16150f;--sf:#201f17;--tx:#f1eee3;--mu:#a29d8b;--ac:#e0a92a;--ac2:#16150f;--bd:#39362a;--ok:#5ccf8a;--bad:#ff8a80}}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:"Segoe UI",Tahoma,Arial,sans-serif;line-height:1.6}
+.w{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:1.6rem;text-align:center;margin:20px 0 4px;color:var(--ac)}
+.sub{text-align:center;color:var(--mu);margin-bottom:20px}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:16px;margin:12px 0}
+button{font:inherit;cursor:pointer;border:0;border-radius:10px;padding:10px 16px;background:var(--ac);color:var(--ac2);font-weight:600}
+button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}button.d{background:var(--bad);color:#fff}
+button:disabled{opacity:.5}
+input,textarea{font:inherit;width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);margin:4px 0 10px}
+label{display:block;font-size:.9rem;color:var(--mu)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>*{flex:1}
+.big{display:grid;grid-template-columns:1fr 1fr;gap:12px}.big button{padding:26px 8px;font-size:1.2rem}
+.tag{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.8rem;border:1px solid var(--bd);color:var(--mu)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.mu{color:var(--mu)}
+.opt{display:block;padding:10px;border:1px solid var(--bd);border-radius:10px;margin:6px 0;cursor:pointer;color:var(--tx);font-size:1rem}
+.opt input{width:auto;margin:0 0 0 8px}
+#timer{position:sticky;top:env(safe-area-inset-top,0px);background:var(--ac);color:var(--ac2);text-align:center;font-weight:700;padding:8px;border-radius:10px;z-index:5}
+.msg{padding:12px;border-radius:10px;background:var(--sf);border:1px solid var(--bd);margin:10px 0}
+</style>
+</head>
+<body>
+<div class="w">
+<h1>الأسطورة محمود يوسف</h1>
+<div class="sub">منصة الامتحانات</div>
+<div id="app"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+<script>
+/* الصق هنا إعدادات Firebase بتاعتك */
+window.FIREBASE_CONFIG={
+  apiKey:"AIzaSyBW9mu2LFyplb4pn-Y1MzVtb__v4-qs88g",
+  authDomain:"mahmoud-exams.firebaseapp.com",
+  projectId:"mahmoud-exams",
+  appId:"1:51762771319:web:83519acdf60c30e36c9d72"
+};
+</script>
+<script>
+(function(){
+var app=document.getElementById('app'),db=null,me=null,teacherPw=null,cur=null,subs=[];
+var $=function(s,r){return (r||document).querySelector(s)};
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function norm(n){return n.replace(/\s+/g,' ').trim()}
+function hash(s){var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h>>>0).toString(36)}
+function fmt(t){return new Date(t).toLocaleString('ar-EG',{dateStyle:'medium',timeStyle:'short'})}
+function lt(t){var d=new Date(t-new Date().getTimezoneOffset()*6e4);return d.toISOString().slice(0,16)}
+function show(h){app.innerHTML=h}
+
+async function init(){
+  show('<div class="msg">جاري التحميل...</div>');
+  try{var C=window.FIREBASE_CONFIG;if(C&&C.apiKey.indexOf('PASTE')<0){firebase.initializeApp(C);db=firebase.firestore()}}catch(e){db=null}
+  home();
+}
+function home(){
+  cur=null;
+  var h='<div class="big"><button id="bt">المدرس</button><button id="bs">الطالب</button></div>';
+  if(!db)h+='<div class="msg bad">قاعدة البيانات مش متوصلة. راجع إعدادات Firebase في أول الملف.</div>';
+  show(h);
+  $('#bt').onclick=teacherLogin;$('#bs').onclick=studentHome;
+}
+
+/* ---------- المدرس ---------- */
+async function teacherLogin(){
+  if(!db)return;
+  var first=false,snap;
+  try{snap=await db.doc('config/teacher').get();first=!snap.exists}catch(e){
+    show('<div class="msg bad">تعذر الاتصال بقاعدة البيانات.</div><button class="g" id="b">رجوع</button>');$('#b').onclick=home;return}
+  teacherPw=first?null:snap.data().pw;
+  show('<div class="card"><label>'+(first?'اعمل باسورد جديد للمدرس':'باسورد المدرس')+'</label><input type="password" id="pw"><div class="row"><button id="go">دخول</button><button class="g" id="b">رجوع</button></div><div id="er" class="bad"></div></div>');
+  $('#b').onclick=home;
+  $('#go').onclick=async function(){
+    var v=$('#pw').value;
+    if(first){if(v.length<4){$('#er').textContent='الباسورد لازم 4 حروف على الأقل';return}
+      await db.doc('config/teacher').set({pw:v});teacherPw=v;dash()}
+    else if(v===teacherPw)dash();else $('#er').textContent='الباسورد غلط';
+  };
+}
+var unsubE=null,exams=[];
+function dash(){
+  show('<div class="row"><button id="nw">+ امتحان جديد</button><button class="g" id="out">خروج</button></div><div id="list"></div>');
+  $('#out').onclick=function(){unsubE&&unsubE();home()};
+  $('#nw').onclick=function(){examForm()};
+  unsubE=db.collection('exams').onSnapshot(function(s){
+    exams=s.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return b.startAt-a.startAt});
+    if($('#list'))renderList();
+  });
+}
+function renderList(){
+  var n=Date.now();
+  $('#list').innerHTML=exams.length?exams.map(function(e){
+    var st=n<e.startAt?'لسه مبدأش':n>e.endAt?'انتهى نهائيًا':'شغال الآن';
+    return '<div class="card"><b>'+esc(e.title)+'</b> <span class="tag">'+st+'</span><div class="mu">البداية: '+fmt(e.startAt)+' · المدة: '+e.dur+' دقيقة · النهاية: '+fmt(e.endAt)+' · '+e.qs.length+' سؤال</div><div class="row" style="margin-top:8px"><button data-r="'+e.id+'">النتائج والأخطاء</button><button class="g" data-e="'+e.id+'">تعديل</button><button class="d" data-d="'+e.id+'">حذف</button></div></div>'}).join(''):'<div class="msg">مفيش امتحانات لسه.</div>';
+  app.querySelectorAll('[data-r]').forEach(function(b){b.onclick=function(){results(b.dataset.r)}});
+  app.querySelectorAll('[data-e]').forEach(function(b){b.onclick=function(){examForm(b.dataset.e)}});
+  app.querySelectorAll('[data-d]').forEach(function(b){b.onclick=function(){if(confirm('حذف الامتحان؟'))db.doc('exams/'+b.dataset.d).delete()}});
+}
+function examForm(id){
+  var e=exams.filter(function(x){return x.id===id})[0]||{title:'',startAt:Date.now(),dur:30,endAt:Date.now()+36e5*24,qs:[{q:'',o:['','','',''],a:0}]};
+  var qs=JSON.parse(JSON.stringify(e.qs));
+  function draw(){
+    show('<div class="card"><label>اسم الامتحان</label><input id="t" value="'+esc(e.title)+'"><div class="row"><div><label>ميعاد البداية</label><input type="datetime-local" id="s" value="'+lt(e.startAt)+'"></div><div><label>مدة الامتحان (دقيقة)</label><input type="number" id="du" min="1" value="'+e.dur+'"></div><div><label>ميعاد الانتهاء النهائي</label><input type="datetime-local" id="en" value="'+lt(e.endAt)+'"></div></div></div><div id="qs"></div><div class="row"><button class="g" id="aq">+ سؤال</button><button id="sv">حفظ الامتحان</button><button class="g" id="cn">إلغاء</button></div><div id="er" class="bad"></div>');
+    $('#qs').innerHTML=qs.map(function(q,i){return '<div class="card"><label>سؤال '+(i+1)+' <a href="#" data-x="'+i+'" class="bad">حذف</a></label><textarea data-q="'+i+'" rows="2">'+esc(q.q)+'</textarea>'+q.o.map(function(o,j){return '<div class="row"><input type="radio" name="a'+i+'" data-a="'+i+'-'+j+'" style="flex:0 0 24px"'+(q.a===j?' checked':'')+'><input data-o="'+i+'-'+j+'" value="'+esc(o)+'" placeholder="اختيار '+(j+1)+'"></div>'}).join('')+'<div class="mu">اختار الدايرة جنب الإجابة الصح</div></div>'}).join('');
+    app.querySelectorAll('[data-x]').forEach(function(a){a.onclick=function(ev){ev.preventDefault();sync();qs.splice(+a.dataset.x,1);draw()}});
+    $('#aq').onclick=function(){sync();qs.push({q:'',o:['','','',''],a:0});draw()};
+    $('#cn').onclick=dash;
+    $('#sv').onclick=save;
+  }
+  function sync(){
+    e.title=$('#t').value;e.dur=+$('#du').value;e.startAt=new Date($('#s').value).getTime();e.endAt=new Date($('#en').value).getTime();
+    app.querySelectorAll('[data-q]').forEach(function(t){qs[+t.dataset.q].q=t.value});
+    app.querySelectorAll('[data-o]').forEach(function(t){var p=t.dataset.o.split('-');qs[+p[0]].o[+p[1]]=t.value});
+    app.querySelectorAll('[data-a]').forEach(function(t){if(t.checked){var p=t.dataset.a.split('-');qs[+p[0]].a=+p[1]}});
+  }
+  async function save(){
+    sync();var er=$('#er');
+    if(!e.title.trim()||!e.dur||isNaN(e.startAt)||isNaN(e.endAt)){er.textContent='كمّل اسم الامتحان والمواعيد والمدة';return}
+    if(e.endAt<=e.startAt){er.textContent='ميعاد الانتهاء لازم يكون بعد البداية';return}
+    if(!qs.length||qs.some(function(q){return !q.q.trim()||q.o.some(function(o){return !o.trim()})})){er.textContent='كل الأسئلة واختياراتها لازم تتملي';return}
+    await db.doc('exams/'+(id||uid())).set({title:e.title.trim(),startAt:e.startAt,endAt:e.endAt,dur:e.dur,qs:qs});
+    dash();
+  }
+  draw();
+}
+var unsubS=null;
+function results(id){
+  var e=exams.filter(function(x){return x.id===id})[0];
+  show('<button class="g" id="b">رجوع</button><h3>'+esc(e.title)+'</h3><div id="rs"></div>');
+  $('#b').onclick=function(){unsubS&&unsubS();dash()};
+  unsubS=db.collection('subs').where('examId','==',id).onSnapshot(function(s){
+    var rows=s.docs.map(function(d){return d.data()});
+    $('#rs').innerHTML=rows.length?rows.map(function(r){
+      var h='<div class="card"><b>'+esc(r.name)+'</b> ';
+      if(r.status!=='done')return h+'<span class="tag">بيمتحن الآن</span></div>';
+      h+='<span class="tag">'+r.score+' / '+e.qs.length+'</span>'+(r.auto?' <span class="tag bad">تسليم تلقائي</span>':'');
+      h+=mistakes(e,r.ans);return h+'</div>'}).join(''):'<div class="msg">لسه حد ما دخلش الامتحان.</div>';
+  });
+}
+function mistakes(e,ans){
+  var m=e.qs.map(function(q,i){return ans[i]===q.a?null:'<div class="msg"><b>'+(i+1)+'. '+esc(q.q)+'</b><div class="bad">إجابته: '+(ans[i]>=0?esc(q.o[ans[i]]):'لم يجب')+'</div><div class="ok">الصح: '+esc(q.o[q.a])+'</div></div>'}).filter(Boolean);
+  return m.length?'<details><summary>الأخطاء ('+m.length+')</summary>'+m.join('')+'</details>':'<div class="ok">كل الإجابات صح 🎉</div>';
+}
+
+/* ---------- الطالب ---------- */
+var unsubX=null;
+function studentHome(){
+  if(!db)return;
+  show('<div class="card"><label>اكتب اسمك رباعي</label><input id="nm" placeholder="الاسم الأول والثاني والثالث والرابع"><div class="row"><button id="go">عرض الامتحانات</button><button class="g" id="b">رجوع</button></div><div id="er" class="bad"></div></div><div id="ex"></div>');
+  $('#b').onclick=function(){unsubX&&unsubX();home()};
+  $('#go').onclick=function(){
+    var n=norm($('#nm').value);
+    if(n.split(' ').length<4){$('#er').textContent='لازم تكتب الاسم رباعي';return}
+    $('#er').textContent='';listExams(n);
+  };
+}
+function listExams(name){
+  unsubX&&unsubX();
+  unsubX=db.collection('exams').onSnapshot(function(s){
+    var n=Date.now();
+    var act=s.docs.map(function(d){return Object.assign({id:d.id},d.data())}).filter(function(e){return n>=e.startAt&&n<=e.endAt});
+    $('#ex').innerHTML=act.length?act.map(function(e){return '<div class="card"><b>'+esc(e.title)+'</b><div class="mu">المدة: '+e.dur+' دقيقة · يقفل: '+fmt(e.endAt)+'</div><button data-s="'+e.id+'">بدء الامتحان</button></div>'}).join(''):'<div class="msg">مفيش امتحانات شغالة دلوقتي.</div>';
+    app.querySelectorAll('[data-s]').forEach(function(b){b.onclick=function(){begin(act.filter(function(x){return x.id===b.dataset.s})[0],name)}});
+  });
+}
+async function begin(e,name){
+  unsubX&&unsubX();
+  var key=e.id+'_'+hash(name),att=db.doc('attempts/'+key);
+  if(Date.now()>e.endAt){alert('الامتحان انتهى');return studentHome()}
+  var s=await att.get();
+  if(s.exists){show('<div class="msg bad">دخلت الامتحان ده قبل كده ومينفعش تدخله تاني.</div><button class="g" id="b">رجوع</button>');$('#b').onclick=studentHome;return}
+  await att.set({t:Date.now()});
+  var sref=db.doc('subs/'+key);
+  async function put(o){o.examId=e.id;await sref.set(o)}
+  await put({name:name,status:'started',t:Date.now()});
+  var ans=e.qs.map(function(){return -1}),done=false,end=Math.min(Date.now()+e.dur*6e4,e.endAt);
+  show('<div id="timer"></div><h3>'+esc(e.title)+' — '+esc(name)+'</h3><div class="msg">لو خرجت من الصفحة أو غيّرت التبويب هيتسلم الامتحان تلقائي ومش هتقدر تدخل تاني.</div>'+
+    e.qs.map(function(q,i){return '<div class="card"><b>'+(i+1)+'. '+esc(q.q)+'</b>'+q.o.map(function(o,j){return '<label class="opt"><input type="radio" name="q'+i+'" data-i="'+i+'" data-j="'+j+'">'+esc(o)+'</label>'}).join('')+'</div>'}).join('')+'<button id="fin">تسليم الامتحان</button>');
+  app.querySelectorAll('[data-i]').forEach(function(r){r.onchange=function(){ans[+r.dataset.i]=+r.dataset.j}});
+  async function finish(auto){
+    if(done)return;done=true;
+    clearInterval(tm);document.removeEventListener('visibilitychange',vis);window.removeEventListener('blur',leave);window.removeEventListener('pagehide',leave);
+    var score=e.qs.filter(function(q,i){return ans[i]===q.a}).length;
+    try{await put({name:name,status:'done',score:score,ans:ans,auto:!!auto,t:Date.now()})}catch(x){}
+    show('<div class="card"><h3>'+esc(name)+'</h3><h2 class="'+(score*2>=e.qs.length?'ok':'bad')+'">درجتك: '+score+' / '+e.qs.length+'</h2>'+(auto?'<div class="bad">تم التسليم تلقائيًا</div>':'')+mistakes(e,ans)+'</div><button class="g" id="b">رجوع للرئيسية</button>');
+    $('#b').onclick=home;
+  }
+  function leave(){finish(true)}
+  function vis(){if(document.hidden)finish(true)}
+  document.addEventListener('visibilitychange',vis);window.addEventListener('blur',leave);window.addEventListener('pagehide',leave);
+  $('#fin').onclick=function(){if(confirm('تسليم الامتحان؟'))finish(false)};
+  function tick(){var r=end-Date.now();if(r<=0){finish(true);return}var m=Math.floor(r/6e4),s=Math.floor(r/1e3)%60;var t=$('#timer');if(t)t.textContent='الوقت المتبقي: '+m+':'+(s<10?'0':'')+s}
+  var tm=setInterval(tick,1000);tick();
+}
+init();
+})();
+</script>
+</body>
+</html>
